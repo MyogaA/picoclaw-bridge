@@ -5,13 +5,9 @@ import telebot
 import cv2  # Pastikan sudah: pip install opencv-python
 import subprocess
 
-# --- KONFIGURASI ---
-TOKEN = "8663457580:AAFmJ9Taj3_mumbW1zbWKFkt8P00FYWW8fM"
-CHAT_ID = "1318804813"
+# --- KONFIGURASI SERIAL ---
 SERIAL_PORT = '/dev/ttyACM0' 
 BAUD_RATE = 115200
-
-bot = telebot.TeleBot(TOKEN)
 
 # PATH DIREKTORI UTAMA
 BASE_PATHS = {
@@ -19,7 +15,36 @@ BASE_PATHS = {
     "POSBEET": "/home/myoga/Documents/posbeet"
 }
 
+# Variabel Global
 current_parent_path = ""
+bot = None
+CHAT_ID = ""
+
+def get_credentials_from_esp():
+    """Mengambil Token dan Chat ID dari memori ESP32 via Serial"""
+    print("🔌 Menghubungkan ke ESP32 untuk mengambil kredensial...")
+    try:
+        # Gunakan context manager agar serial tertutup otomatis setelah ambil data
+        with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=2) as ser:
+            time.sleep(2)  # Tunggu ESP32 reboot setelah dicolok
+            
+            # Minta Token
+            ser.write(b"GET_TOKEN\n")
+            token_line = ser.readline().decode().strip()
+            token = token_line.replace("TOKEN:", "")
+            
+            # Minta Chat ID
+            ser.write(b"GET_ID\n")
+            id_line = ser.readline().decode().strip()
+            chat_id = id_line.replace("ID:", "")
+            
+            if token and chat_id:
+                return token, chat_id
+            else:
+                return None, None
+    except Exception as e:
+        print(f"❌ Gagal mengambil data: {e}")
+        return None, None
 
 def capture_photo_opencv():
     cap = None
@@ -90,8 +115,8 @@ def open_with_antigravity(cmd_text):
         bot.send_message(CHAT_ID, f"❌ Folder tidak ditemukan: {folder_name}")
 
 def execute_command(line):
-    # Abaikan pesan log dari WiFiManager (yang biasanya diawali tanda *)
-    if line.startswith("*") or "IP Address" in line:
+    # Filter log sampah dari ESP32
+    if any(x in line for x in ["*", "IP Address", "WIFI_READY", "TOKEN:", "ID:"]):
         return 
 
     print(f"📩 Valid Command: {line}")
@@ -128,19 +153,33 @@ def execute_command(line):
         os.system("poweroff")
 
 def main():
+    global bot, CHAT_ID
     print("--- Picoclaw Unified Bridge System Online ---")
+
+    # Inisialisasi Kredensial
+    token, chat_id = get_credentials_from_esp()
+    
+    if not token or not chat_id:
+        print("❌ Gagal mendapatkan Token dari hardware. Mematikan sistem...")
+        return
+
+    CHAT_ID = chat_id
+    bot = telebot.TeleBot(token)
+    print(f"✅ Bot Terhubung (ID: {CHAT_ID})")
+
+    # Loop utama mendengarkan Serial
     while True:
         try:
             with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1) as ser:
-                print(f"✅ Bridge Aktif di {SERIAL_PORT}")
+                print(f"📡 Mendengarkan Command di {SERIAL_PORT}...")
                 while True:
                     if ser.in_waiting > 0:
-                        line = ser.readline().decode('utf-8').strip()
+                        line = ser.readline().decode('utf-8', errors='ignore').strip()
                         if line:
                             execute_command(line)
                     time.sleep(0.1)
         except Exception as e:
-            print(f"📴 Menunggu koneksi ESP32... ({e})")
+            print(f"📴 Koneksi terputus, mencoba ulang... ({e})")
             time.sleep(3)
 
 if __name__ == "__main__":
