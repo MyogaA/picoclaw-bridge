@@ -37,7 +37,7 @@ fi
 
 # 5. Install Library
 pip install --upgrade pip
-pip install pyserial pyTelegramBotAPI opencv-python
+pip install pyserial pyTelegramBotAPI opencv-python SpeechRecognition pydub
 
 # 6. Run Bridge
 export PYTHONIOENCODING=utf-8
