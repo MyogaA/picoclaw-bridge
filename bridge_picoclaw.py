@@ -175,47 +175,64 @@ def execute_command(line):
 def start_voice_bot():
     @bot.message_handler(content_types=['voice'])
     def handle_voice(message):
+        # Gunakan nama file unik berdasarkan message_id agar tidak bentrok jika kirim suara cepat
+        msg_id = message.message_id
+        oga_path = os.path.join(TEMP_DIR, f"voice_{msg_id}.oga")
+        wav_path = os.path.join(TEMP_DIR, f"voice_{msg_id}.wav")
+        
         try:
-            print("[VOICE] Menerima pesan suara...")
+            print(f"[VOICE] Menerima pesan suara ID: {msg_id}")
             file_info = bot.get_file(message.voice.file_id)
             downloaded_file = bot.download_file(file_info.file_path)
-            
-            oga_path = os.path.join(TEMP_DIR, "voice.oga")
-            wav_path = os.path.join(TEMP_DIR, "voice.wav")
             
             with open(oga_path, 'wb') as f:
                 f.write(downloaded_file)
             
-            # Konversi OGA ke WAV (Butuh FFmpeg di sistem)
-            audio = AudioSegment.from_ogg(oga_path)
+            # Konversi OGA ke WAV
+            # Memastikan pydub bisa menemukan ffmpeg
+            audio = AudioSegment.from_file(oga_path, format="ogg")
             audio.export(wav_path, format="wav")
             
             with sr.AudioFile(wav_path) as source:
+                # Adjust for ambient noise sedikit agar lebih akurat
+                recognizer.adjust_for_ambient_noise(source)
                 audio_data = recognizer.record(source)
+                
+                # Gunakan recognize_google dengan bahasa Indonesia
                 text = recognizer.recognize_google(audio_data, language="id-ID").lower()
                 bot.reply_to(message, f"🎙️ Mendengar: \"{text}\"")
                 
-                # Pemetaan Perintah Suara
-                if "foto" in text or "kamera" in text:
+                # Pemetaan Perintah
+                if any(word in text for word in ["foto", "kamera", "potret"]):
                     execute_command("CMD_CAPTURE_PHOTO")
                 elif "youtube" in text:
                     execute_command("CMD_YT")
                 elif "whatsapp" in text:
                     execute_command("CMD_WA")
-                elif "istirahat" in text or "tidur" in text:
+                elif any(word in text for word in ["istirahat", "tidur", "sleep"]):
                     execute_command("CMD_SLEEP")
                 else:
-                    bot.send_message(CHAT_ID, "Perintah suara tidak dikenali.")
+                    bot.send_message(CHAT_ID, f"❓ Perintah '{text}' belum terdaftar.")
 
-            if os.path.exists(oga_path): os.remove(oga_path)
-            if os.path.exists(wav_path): os.remove(wav_path)
-            
         except Exception as e:
-            bot.reply_to(message, f"❌ Error Voice: {e}")
+            print(f"[ERROR] Voice Processing: {e}")
+            bot.reply_to(message, f"❌ Gagal memproses suara: {str(e)}")
+            
+        finally:
+            # Pastikan file dihapus baik sukses maupun error
+            for path in [oga_path, wav_path]:
+                if os.path.exists(path):
+                    try: os.remove(path)
+                    except: pass
 
-    print("[SUCCESS] Bot Polling Aktif (Menunggu Pesan/Suara)...")
-    bot.infinity_polling(non_stop=True, skip_pending=True)
-
+    # Tambahkan remove_webhook untuk menghindari error 409 Conflict
+    try:
+        bot.remove_webhook()
+        time.sleep(1)
+        print("[SUCCESS] Bot Polling Aktif (Menunggu Pesan/Suara)...")
+        bot.infinity_polling(non_stop=True, skip_pending=True, timeout=60)
+    except Exception as e:
+        print(f"[CRITICAL] Bot Polling Error: {e}")
 def main():
     global bot, CHAT_ID
     print("--- Picoclaw Unified Bridge System Online ---")
