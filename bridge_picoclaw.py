@@ -46,6 +46,7 @@ current_parent_path = ""
 bot = None
 CHAT_ID = ""
 recognizer = sr.Recognizer()
+bot_started = False  # Mencegah Race Condition Thread
 
 def get_credentials_from_esp():
     """Mengambil Token dan Chat ID dari hardware ESP32 via Serial"""
@@ -77,14 +78,12 @@ def capture_photo_opencv():
     cap = None
     try:
         if bot: bot.send_message(CHAT_ID, "📸 Memulai kamera (Linux V4L2)...")
-        # Di Linux, gunakan CAP_V4L2 untuk stabilitas
         cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
         if not cap.isOpened():
             if bot: bot.send_message(CHAT_ID, "Gagal: Kamera tidak terdeteksi!")
             return
 
-        # Warming up sensor
-        for _ in range(10): cap.read()
+        for _ in range(10): cap.read() # Warming up
 
         ret, frame = cap.read()
         if ret:
@@ -175,7 +174,6 @@ def execute_command(line):
 def start_voice_bot():
     @bot.message_handler(content_types=['voice'])
     def handle_voice(message):
-        # Gunakan nama file unik berdasarkan message_id agar tidak bentrok jika kirim suara cepat
         msg_id = message.message_id
         oga_path = os.path.join(TEMP_DIR, f"voice_{msg_id}.oga")
         wav_path = os.path.join(TEMP_DIR, f"voice_{msg_id}.wav")
@@ -188,21 +186,15 @@ def start_voice_bot():
             with open(oga_path, 'wb') as f:
                 f.write(downloaded_file)
             
-            # Konversi OGA ke WAV
-            # Memastikan pydub bisa menemukan ffmpeg
             audio = AudioSegment.from_file(oga_path, format="ogg")
             audio.export(wav_path, format="wav")
             
             with sr.AudioFile(wav_path) as source:
-                # Adjust for ambient noise sedikit agar lebih akurat
                 recognizer.adjust_for_ambient_noise(source)
                 audio_data = recognizer.record(source)
-                
-                # Gunakan recognize_google dengan bahasa Indonesia
                 text = recognizer.recognize_google(audio_data, language="id-ID").lower()
                 bot.reply_to(message, f"🎙️ Mendengar: \"{text}\"")
                 
-                # Pemetaan Perintah
                 if any(word in text for word in ["foto", "kamera", "potret"]):
                     execute_command("CMD_CAPTURE_PHOTO")
                 elif "youtube" in text:
@@ -217,44 +209,41 @@ def start_voice_bot():
         except Exception as e:
             print(f"[ERROR] Voice Processing: {e}")
             bot.reply_to(message, f"❌ Gagal memproses suara: {str(e)}")
-            
         finally:
-            # Pastikan file dihapus baik sukses maupun error
             for path in [oga_path, wav_path]:
                 if os.path.exists(path):
                     try: os.remove(path)
                     except: pass
 
-    # Tambahkan remove_webhook untuk menghindari error 409 Conflict
     try:
         bot.remove_webhook()
         time.sleep(1)
         print("[SUCCESS] Bot Polling Aktif (Menunggu Pesan/Suara)...")
-        bot.infinity_polling(non_stop=True, skip_pending=True, timeout=60)
+        # non_stop sudah otomatis True di infinity_polling, jangan tambahkan lagi
+        bot.infinity_polling(skip_pending=True, timeout=60)
     except Exception as e:
         print(f"[CRITICAL] Bot Polling Error: {e}")
+
 def main():
-    global bot, CHAT_ID
+    global bot, CHAT_ID, bot_started
     print("--- Picoclaw Unified Bridge System Online ---")
 
-    # 1. Ambil kredensial
     token, chat_id = get_credentials_from_esp()
     
     if not token or not chat_id:
         print("[FAIL] Kredensial hardware gagal diambil.")
         return
 
-    # 2. Inisialisasi Bot & Thread (Hanya jika belum aktif)
     CHAT_ID = chat_id
     if bot is None:
         bot = telebot.TeleBot(token)
-        print(f"[SUCCESS] Bot Terhubung (ID: {CHAT_ID})")
-        
-        # Jalankan thread bot
+        print(f"[DEBUG] Menggunakan Token: {token[:5]}***") 
+    
+    if not bot_started:
         bot_thread = threading.Thread(target=start_voice_bot, daemon=True)
         bot_thread.start()
+        bot_started = True
 
-    # 3. Loop utama monitoring Serial ESP32
     while True:
         try:
             with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1) as ser:
