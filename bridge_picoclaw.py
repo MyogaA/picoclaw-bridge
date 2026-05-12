@@ -220,22 +220,24 @@ def main():
     global bot, CHAT_ID
     print("--- Picoclaw Unified Bridge System Online ---")
 
+    # 1. Ambil kredensial
     token, chat_id = get_credentials_from_esp()
     
     if not token or not chat_id:
-        print("[FAIL] Kredensial hardware gagal diambil. Pastikan ESP32 terhubung dan merespon.")
+        print("[FAIL] Kredensial hardware gagal diambil.")
         return
 
+    # 2. Inisialisasi Bot & Thread (Hanya jika belum aktif)
     CHAT_ID = chat_id
-  if bot is None:
+    if bot is None:
         bot = telebot.TeleBot(token)
         print(f"[SUCCESS] Bot Terhubung (ID: {CHAT_ID})")
         
-        # Jalankan thread bot hanya sekali
+        # Jalankan thread bot
         bot_thread = threading.Thread(target=start_voice_bot, daemon=True)
         bot_thread.start()
 
-    # Loop Serial tetap berjalan di bawahnya
+    # 3. Loop utama monitoring Serial ESP32
     while True:
         try:
             with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1) as ser:
@@ -248,7 +250,7 @@ def main():
                             execute_command(line)
                     time.sleep(0.1)
         except Exception as e:
-            print(f"[RECONNECT] Koneksi terputus: {e}. Mencoba lagi...")
+            print(f"[RECONNECT] Koneksi terputus: {e}. Mencoba lagi dalam 3 detik...")
             time.sleep(3)
 
 if __name__ == "__main__":
