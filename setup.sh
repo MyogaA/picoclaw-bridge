@@ -4,52 +4,51 @@ REPO_URL="https://github.com/MyogaA/picoclaw-bridge.git"
 PROJECT_DIR="picoclaw-bridge"
 
 echo "------------------------------------------------"
-echo "🚀 Picoclaw Bootstrapper (Fix Command Not Found)"
+echo "🚀 Picoclaw Bootstrapper (Windows/Linux Fix)"
 echo "------------------------------------------------"
 
-# 1. Download Repo
-if [ ! -d "$PROJECT_DIR" ]; then
+# 1. Download/Update Repo
+if [ ! -d "$PROJECT_DIR" ] && [ ! -f "bridge_picoclaw.py" ]; then
     git clone $REPO_URL
+    cd $PROJECT_DIR || exit
+elif [ -d "$PROJECT_DIR" ]; then
+    cd $PROJECT_DIR || exit
 fi
-cd $PROJECT_DIR || exit
 
-# 2. Deteksi Perintah Python yang Tersedia
+# 2. Cari perintah Python yang benar (Windows sering pakai 'python')
 if command -v python &>/dev/null; then
-    PY_CMD="python"
+    PY_BIN="python"
 elif command -v python3 &>/dev/null; then
-    PY_CMD="python3"
+    PY_BIN="python3"
 else
-    echo "❌ Error: Python tidak ditemukan di sistem ini!"
+    echo "❌ Error: Python tidak ditemukan. Install Python & centang 'Add to PATH'."
     exit 1
 fi
 
-echo "✅ Menggunakan: $PY_CMD"
-
-# 3. Setup Virtual Environment
+# 3. Buat VENV jika belum ada
 if [ ! -d "venv" ]; then
-    echo "📦 Membuat Virtual Environment..."
-    $PY_CMD -m venv venv
+    echo "🛠️ Membuat Virtual Environment..."
+    $PY_BIN -m venv venv
 fi
 
-# 4. Aktivasi (Cek folder Scripts untuk Windows atau bin untuk Linux)
-if [ -d "venv/Scripts" ]; then
-    echo "💻 Mendeteksi Windows (Git Bash)..."
+# 4. AKTIVASI (Logika deteksi folder yang sangat ketat)
+if [ -f "venv/Scripts/activate" ]; then
+    echo "💻 Windows detected, activating..."
     source venv/Scripts/activate
-elif [ -d "venv/bin" ]; then
-    echo "🐧 Mendeteksi Linux..."
+elif [ -f "venv/bin/activate" ]; then
+    echo "🐧 Linux detected, activating..."
     source venv/bin/activate
 else
-    echo "❌ Error: Folder venv ditemukan tapi tidak bisa diaktivasi."
+    echo "❌ Error: Folder venv/Scripts atau venv/bin tidak ditemukan!"
     exit 1
 fi
 
-# 5. Install Dependencies
-echo "📥 Menginstall requirements..."
+# 5. Install requirements
+echo "📥 Menginstall library..."
 pip install --upgrade pip
 pip install pyserial pyTelegramBotAPI opencv-python
 
-# 6. Jalankan Bridge
-echo "------------------------------------------------"
+# 6. Jalankan dengan encoding UTF-8 agar tidak error di Windows
 echo "⚡ MENJALANKAN BRIDGE..."
-echo "------------------------------------------------"
-$PY_CMD bridge_picoclaw.py
+export PYTHONIOENCODING=utf-8
+$PY_BIN bridge_picoclaw.py
