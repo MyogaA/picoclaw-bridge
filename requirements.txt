@@ -1,0 +1,3 @@
+pyserial
+pyTelegramBotAPI
+opencv-python
