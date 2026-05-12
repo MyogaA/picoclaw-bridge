@@ -214,7 +214,7 @@ def start_voice_bot():
             bot.reply_to(message, f"❌ Error Voice: {e}")
 
     print("[SUCCESS] Bot Polling Aktif (Menunggu Pesan/Suara)...")
-    bot.infinity_polling()
+    bot.infinity_polling(non_stop=True, skip_pending=True)
 
 def main():
     global bot, CHAT_ID
@@ -227,14 +227,15 @@ def main():
         return
 
     CHAT_ID = chat_id
-    bot = telebot.TeleBot(token)
-    print(f"[SUCCESS] Bot Terhubung (ID: {CHAT_ID})")
+  if bot is None:
+        bot = telebot.TeleBot(token)
+        print(f"[SUCCESS] Bot Terhubung (ID: {CHAT_ID})")
+        
+        # Jalankan thread bot hanya sekali
+        bot_thread = threading.Thread(target=start_voice_bot, daemon=True)
+        bot_thread.start()
 
-    # Jalankan Bot Telegram di Thread terpisah
-    bot_thread = threading.Thread(target=start_voice_bot, daemon=True)
-    bot_thread.start()
-
-    # Loop utama monitoring Serial ESP32
+    # Loop Serial tetap berjalan di bawahnya
     while True:
         try:
             with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1) as ser:
