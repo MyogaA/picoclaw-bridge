@@ -1,23 +1,35 @@
 #!/bin/bash
 
-echo "🚀 Memulai Setup Picoclaw Bridge..."
+# Konfigurasi
+PROJECT_DIR="picoclaw-bridge"
+REPO_URL="https://github.com/MyogaA/picoclaw-bridge.git"
 
-# 1. Update & Install Python venv (jika belum ada)
-sudo apt update && sudo apt install -y python3-venv python3-pip
+echo "------------------------------------------"
+echo "🚀 Picoclaw Unified Bootstrapper"
+echo "------------------------------------------"
 
-# 2. Buat Virtual Environment
-if [ ! -d "venv" ]; then
-    python3 -m venv venv
-    echo "✅ Virtual Environment dibuat."
+# 1. Cek apakah kita sudah di dalam folder project
+if [ ! -f "bridge_picoclaw.py" ]; then
+    echo "📂 Project belum ada. Mendownload dari GitHub..."
+    git clone $REPO_URL $PROJECT_DIR
+    cd $PROJECT_DIR || exit
 fi
 
-# 3. Aktivasi venv dan Install Requirements
-source venv/bin/activate
-pip install --upgrade pip
-pip install opencv-python pyTelegramBotAPI pyserial
+# 2. Cek/Install Python Venv & Dependencies
+if [ ! -d "venv" ]; then
+    echo "📦 Setup pertama kali: Membuat Virtual Environment..."
+    sudo apt update && sudo apt install -y python3-venv python3-pip
+    python3 -m venv venv
+    
+    source venv/bin/activate
+    echo "📥 Menginstal OpenCV dan library lainnya..."
+    pip install --upgrade pip
+    pip install opencv-python pyTelegramBotAPI pyserial
+else
+    echo "✅ Environment ditemukan. Mengaktifkan..."
+    source venv/bin/activate
+fi
 
-echo "✅ Semua requirements berhasil diinstall!"
-echo "🚀 Menjalankan Bridge..."
-
-# 4. Jalankan Bridge
+# 3. Jalankan Bridge
+echo "⚡ Menjalankan Bridge Picoclaw..."
 python3 bridge_picoclaw.py
